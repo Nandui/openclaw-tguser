@@ -205,13 +205,13 @@ async function handleInbound(event, myIdStr, myUsername) {
     if (!decideGroup(mentioned)) return;
   }
 
-  // Mark as read after a realistic delay — she saw it, double tick appears
+  // Mark as read after 2-4 seconds — realistic reaction time
   const peer = msg.chatId ?? peerId;
   setTimeout(async () => {
     try {
       await client.invoke(new Api.messages.ReadHistory({ peer, maxId: msg.id }));
     } catch {}
-  }, 1000 + Math.floor(Math.random() * 1500)); // 1-2.5 seconds after receiving
+  }, 2000 + Math.floor(Math.random() * 2000)); // 2-4 seconds
 
   // Update context history
   const ctx = appendToContext(sKey, "user", peerName, text || "(media)", msg.id);
@@ -279,14 +279,30 @@ function startOutboxWatcher() {
       }
 
       try {
-        // Show typing indicator briefly, then send
+        // Keep sending typing indicator every 4 seconds until ready to send
+        // Telegram clears typing after ~5s so we refresh it
+        let sending = false;
+        const typingInterval = setInterval(async () => {
+          if (sending) return;
+          try {
+            await client.invoke(new Api.messages.SetTyping({
+              peer: env.peer, action: new Api.SendMessageTypingAction(),
+            }));
+          } catch {}
+        }, 4000);
+
+        // Show typing immediately
         try {
           await client.invoke(new Api.messages.SetTyping({
             peer: env.peer, action: new Api.SendMessageTypingAction(),
           }));
         } catch {}
-        // Typing pause — realistic typing time before sending
-        await new Promise(r => setTimeout(r, 3000 + Math.floor(Math.random() * 4000)));
+
+        // Realistic typing time — 3-6 seconds
+        await new Promise(r => setTimeout(r, 3000 + Math.floor(Math.random() * 3000)));
+
+        sending = true;
+        clearInterval(typingInterval);
         await sendOutbound(env);
         if (env.sessionKey) appendToContext(env.sessionKey, "assistant", "Agent", env.text, null);
       } catch (err) {
