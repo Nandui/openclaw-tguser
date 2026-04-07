@@ -211,7 +211,7 @@ async function handleInbound(event, myIdStr, myUsername) {
     try {
       await client.invoke(new Api.messages.ReadHistory({ peer, maxId: msg.id }));
     } catch {}
-  }, 4000 + Math.floor(Math.random() * 8000)); // 4-12 seconds after receiving
+  }, 2000 + Math.floor(Math.random() * 3000)); // 2-5 seconds after receiving
 
   // Update context history
   const ctx = appendToContext(sKey, "user", peerName, text || "(media)", msg.id);
@@ -286,7 +286,7 @@ function startOutboxWatcher() {
           }));
         } catch {}
         // Brief typing pause — she's a fast typer
-        await new Promise(r => setTimeout(r, 1500 + Math.floor(Math.random() * 2000)));
+        await new Promise(r => setTimeout(r, 800 + Math.floor(Math.random() * 1200)));
         await sendOutbound(env);
         if (env.sessionKey) appendToContext(env.sessionKey, "assistant", "Agent", env.text, null);
       } catch (err) {
