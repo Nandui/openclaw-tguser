@@ -271,25 +271,31 @@ function startOutboxWatcher() {
       }
 
       try {
-        // Show typing + mark read only NOW — when reply is actually ready to send
-        // Random delay 3-9 seconds — fast for a real person but not instant
-        const typingDelay = 3000 + Math.floor(Math.random() * 6000);
-        await new Promise(r => setTimeout(r, typingDelay));
+        // Human-like sequence:
+        // 1. Short delay (3-9s) — person notices and picks up phone
+        // 2. Mark as read
+        // 3. Show typing
+        // 4. Send
+        const humanDelay = 3000 + Math.floor(Math.random() * 6000);
+        await new Promise(r => setTimeout(r, humanDelay));
+
+        // Mark as read
+        if (env.readMsgId) {
+          try {
+            await client.invoke(new Api.messages.ReadHistory({
+              peer: env.peer, maxId: env.readMsgId,
+            }));
+          } catch {}
+        }
+
+        // Show typing for 1-2 seconds
         try {
           await client.invoke(new Api.messages.SetTyping({
             peer: env.peer, action: new Api.SendMessageTypingAction(),
           }));
         } catch {}
-        // Mark the original message as read
-        if (env.readMsgId) {
-          setTimeout(async () => {
-            try {
-              await client.invoke(new Api.messages.ReadHistory({
-                peer: env.peer, maxId: env.readMsgId,
-              }));
-            } catch {}
-          }, cfg.readDelay ?? 800);
-        }
+        await new Promise(r => setTimeout(r, 1000 + Math.floor(Math.random() * 1500)));
+
         await sendOutbound(env);
         if (env.sessionKey) appendToContext(env.sessionKey, "assistant", "Agent", env.text, null);
       } catch (err) {
