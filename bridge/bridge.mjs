@@ -271,17 +271,23 @@ function startOutboxWatcher() {
       }
 
       try {
-        // Mark as read and start typing at the same moment — she's responding now
+        // Mark as read — she's about to respond
         try {
           await client.invoke(new Api.messages.ReadHistory({
             peer: env.peer, maxId: env.readMsgId ?? 999999999,
           }));
         } catch {}
 
-        // Keep sending typing indicator every 4 seconds until ready to send
-        let sending = false;
-        const typingInterval = setInterval(async () => {
-          if (sending) return;
+        // Calculate realistic typing time based on message length
+        // Lana types ~200 chars per minute (fast but human)
+        // Min 2s, max 8s
+        const replyLength = (env.text ?? "").length;
+        const typingMs = Math.min(8000, Math.max(2000, Math.floor(replyLength / 200 * 60000)));
+
+        // Show typing and keep refreshing it every 4s (Telegram clears after ~5s)
+        let done = false;
+        const refresh = setInterval(async () => {
+          if (done) return;
           try {
             await client.invoke(new Api.messages.SetTyping({
               peer: env.peer, action: new Api.SendMessageTypingAction(),
@@ -289,18 +295,16 @@ function startOutboxWatcher() {
           } catch {}
         }, 4000);
 
-        // Show typing immediately
         try {
           await client.invoke(new Api.messages.SetTyping({
             peer: env.peer, action: new Api.SendMessageTypingAction(),
           }));
         } catch {}
 
-        // Realistic typing time — 3-6 seconds
-        await new Promise(r => setTimeout(r, 3000 + Math.floor(Math.random() * 3000)));
+        await new Promise(r => setTimeout(r, typingMs));
+        done = true;
+        clearInterval(refresh);
 
-        sending = true;
-        clearInterval(typingInterval);
         await sendOutbound(env);
         if (env.sessionKey) appendToContext(env.sessionKey, "assistant", "Agent", env.text, null);
       } catch (err) {
