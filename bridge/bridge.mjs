@@ -272,6 +272,9 @@ function startOutboxWatcher() {
 
       try {
         // Show typing + mark read only NOW — when reply is actually ready to send
+        // Random delay 3-9 seconds — fast for a real person but not instant
+        const typingDelay = 3000 + Math.floor(Math.random() * 6000);
+        await new Promise(r => setTimeout(r, typingDelay));
         try {
           await client.invoke(new Api.messages.SetTyping({
             peer: env.peer, action: new Api.SendMessageTypingAction(),
