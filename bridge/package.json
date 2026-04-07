@@ -1,0 +1,14 @@
+{
+  "name": "openclaw-tguser-bridge",
+  "version": "4.0.0",
+  "description": "GramJS MTProto bridge for OpenClaw — inbox/outbox inside agent workspace",
+  "type": "module",
+  "scripts": {
+    "auth":  "node auth.mjs",
+    "start": "node bridge.mjs"
+  },
+  "dependencies": {
+    "telegram": "^2.22.2"
+  },
+  "engines": { "node": ">=18" }
+}
