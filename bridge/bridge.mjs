@@ -205,12 +205,6 @@ async function handleInbound(event, myIdStr, myUsername) {
     if (!decideGroup(mentioned)) return;
   }
 
-  // Typing + read receipt
-  try { await client.invoke(new Api.messages.SetTyping({ peer: msg.chatId ?? peerId, action: new Api.SendMessageTypingAction() })); } catch {}
-  setTimeout(async () => {
-    try { await client.invoke(new Api.messages.ReadHistory({ peer: msg.chatId ?? peerId, maxId: msg.id })); } catch {}
-  }, cfg.readDelay ?? 1200);
-
   // Update context history
   const ctx = appendToContext(sKey, "user", peerName, text || "(media)", msg.id);
   const history = ctx.messages.slice(-20)
@@ -220,7 +214,11 @@ async function handleInbound(event, myIdStr, myUsername) {
   // Write inbox file into agent workspace
   // Agent reads this with the read tool — always works, no policy config needed
   const inboxFile = path.join(INBOX_DIR, toFilename(sKey));
-  const outboxFile = path.join(OUTBOX_DIR, toFilename(sKey));
+
+  // replyToId only used in groups (quoting makes sense there, not in DMs)
+  const replyTemplate = isPrivate
+    ? { peer: peerId, text: "WRITE_YOUR_REPLY_HERE", sessionKey: sKey }
+    : { peer: chatId, text: "WRITE_YOUR_REPLY_HERE", replyToId: msg.id, sessionKey: sKey };
 
   const envelope = {
     sessionKey:  sKey,
@@ -237,14 +235,10 @@ async function handleInbound(event, myIdStr, myUsername) {
     },
     conversationHistory: history,
     // Exactly what the agent writes to tguser-outbox/ to reply
-    replyTemplate: {
-      peer:       peerId,
-      text:       "WRITE_YOUR_REPLY_HERE",
-      replyToId:  msg.id,
-      sessionKey: sKey,
-    },
+    replyTemplate,
     // Where to write the reply file (relative to workspace)
     replyFilePath: `tguser-outbox/${toFilename(sKey)}`,
+    readMsgId:  msg.id,
     updatedAt: Date.now(),
   };
 
@@ -277,6 +271,22 @@ function startOutboxWatcher() {
       }
 
       try {
+        // Show typing + mark read only NOW — when reply is actually ready to send
+        try {
+          await client.invoke(new Api.messages.SetTyping({
+            peer: env.peer, action: new Api.SendMessageTypingAction(),
+          }));
+        } catch {}
+        // Mark the original message as read
+        if (env.readMsgId) {
+          setTimeout(async () => {
+            try {
+              await client.invoke(new Api.messages.ReadHistory({
+                peer: env.peer, maxId: env.readMsgId,
+              }));
+            } catch {}
+          }, cfg.readDelay ?? 800);
+        }
         await sendOutbound(env);
         if (env.sessionKey) appendToContext(env.sessionKey, "assistant", "Agent", env.text, null);
       } catch (err) {
