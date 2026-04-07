@@ -205,6 +205,14 @@ async function handleInbound(event, myIdStr, myUsername) {
     if (!decideGroup(mentioned)) return;
   }
 
+  // Mark as read after a realistic delay — she saw it, double tick appears
+  const peer = msg.chatId ?? peerId;
+  setTimeout(async () => {
+    try {
+      await client.invoke(new Api.messages.ReadHistory({ peer, maxId: msg.id }));
+    } catch {}
+  }, 4000 + Math.floor(Math.random() * 8000)); // 4-12 seconds after receiving
+
   // Update context history
   const ctx = appendToContext(sKey, "user", peerName, text || "(media)", msg.id);
   const history = ctx.messages.slice(-20)
@@ -271,31 +279,14 @@ function startOutboxWatcher() {
       }
 
       try {
-        // Human-like sequence:
-        // 1. Short delay (3-9s) — person notices and picks up phone
-        // 2. Mark as read
-        // 3. Show typing
-        // 4. Send
-        const humanDelay = 3000 + Math.floor(Math.random() * 6000);
-        await new Promise(r => setTimeout(r, humanDelay));
-
-        // Mark as read
-        if (env.readMsgId) {
-          try {
-            await client.invoke(new Api.messages.ReadHistory({
-              peer: env.peer, maxId: env.readMsgId,
-            }));
-          } catch {}
-        }
-
-        // Show typing for 1-2 seconds
+        // Show typing indicator briefly, then send
         try {
           await client.invoke(new Api.messages.SetTyping({
             peer: env.peer, action: new Api.SendMessageTypingAction(),
           }));
         } catch {}
-        await new Promise(r => setTimeout(r, 1000 + Math.floor(Math.random() * 1500)));
-
+        // Brief typing pause — she's a fast typer
+        await new Promise(r => setTimeout(r, 1500 + Math.floor(Math.random() * 2000)));
         await sendOutbound(env);
         if (env.sessionKey) appendToContext(env.sessionKey, "assistant", "Agent", env.text, null);
       } catch (err) {
