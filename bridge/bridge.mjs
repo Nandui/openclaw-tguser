@@ -205,14 +205,6 @@ async function handleInbound(event, myIdStr, myUsername) {
     if (!decideGroup(mentioned)) return;
   }
 
-  // Mark as read after 2-4 seconds — realistic reaction time
-  const peer = msg.chatId ?? peerId;
-  setTimeout(async () => {
-    try {
-      await client.invoke(new Api.messages.ReadHistory({ peer, maxId: msg.id }));
-    } catch {}
-  }, 2000 + Math.floor(Math.random() * 2000)); // 2-4 seconds
-
   // Update context history
   const ctx = appendToContext(sKey, "user", peerName, text || "(media)", msg.id);
   const history = ctx.messages.slice(-20)
@@ -279,8 +271,14 @@ function startOutboxWatcher() {
       }
 
       try {
+        // Mark as read and start typing at the same moment — she's responding now
+        try {
+          await client.invoke(new Api.messages.ReadHistory({
+            peer: env.peer, maxId: env.readMsgId ?? 999999999,
+          }));
+        } catch {}
+
         // Keep sending typing indicator every 4 seconds until ready to send
-        // Telegram clears typing after ~5s so we refresh it
         let sending = false;
         const typingInterval = setInterval(async () => {
           if (sending) return;
